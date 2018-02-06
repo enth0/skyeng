@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script src="https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/vkbeautify/vkbeautify.0.99.00.beta.js"></script>
+</head>
+ <body>
+
+ 
+    <table>
+  <tr>
+    <td><textarea id="ta" rows="30" cols="70"></textarea></td>
+        <td style="vertical-align: top;"> 
+            <form id="myForm">
+                <input type="radio" name="type" value="dialogue">диалог<br>
+                <input type="radio" name="type" value="list">список<br>
+                <input type="radio" name="type" value="select">селект<br>
+                <input type="radio" name="type" value="input">инпут<br>
+                <input type="radio" name="type" value="dnd">днд<br>
+            </form> 
+         <ol>
+          <li>Выберете нужный тэг из списка выше</li>
+          <li>Выделите нужное упражнение в доке и скопируйте (<a href="https://drive.google.com/open?id=1lGCq3EcKPScR-FO9Gl90BnWoPfW_AjW6l2xc8IOL3Yw">примеры упражнений</a>)</li>
+          <li>Вернитесь на эту страницу и нажмите Ctrl + V, в окне слева должна появиться готовая верстка</li>
+          </li>
+		  <li>Если скрипт не работает на каком-то упражнении, просьба скопировать упражнение из дока <a href="https://docs.google.com/document/d/17dI1G8E63CbkOuguSBqT7etp35ASEcORr6J8PwlnSZc/edit?usp=sharing">сюда</a>.<br/>
+		  Также туда можно писать любые комментарии по работе скрипта.</li>
+         </ol>
+        </td>
+  </tr>
+
+</table>
+
+<p></p>
+<button>Copy</button>
+ 
+ <script>
+    $("button").click(function(){
+        $("textarea").select();
+        document.execCommand('copy');
+    });
+ 
+    $(document).on("paste", function(e) {
+        e.preventDefault();
+        var htmldata = e.originalEvent.clipboardData.getData('text/html');
+		var text = e.originalEvent.clipboardData.getData('text/plain');
+		console.log(vkbeautify.xml(htmldata));
+		console.log(text);
+        var html = $.parseHTML(htmldata);
+        html = $("<div/>").append($(html));
+               
+        function dialogue(htmldata) {
+            var names = [];
+            var names_letter = [];
+            var firstline = $(htmldata).find("span:first").text();
+            var count = (firstline.match(/=/g) || []).length;
+            var re = /[A-Z]\s*=/g;
+            names_letter = firstline.match(re);
+            if (count > 1) {
+                firstline = firstline.replace(re,"%");
+                names = firstline.split("%");
+                names.shift();
+            }
+            var xml = "<vim-conversation fill-style='background'><vim-conversation-speakers></vim-conversation-speakers><vim-conversation-content></vim-conversation-content></vim-conversation>";       
+            var xmlDoc = $.parseXML(xml);
+            
+            for (i = 0; i < names.length; i++) {
+                names[i] = names[i].trim();
+                $(xmlDoc).find("vim-conversation-speakers").append("<vim-conversation-speaker></vim-conversation-speaker>");
+                $(xmlDoc).find("vim-conversation-speaker:last").attr("id", i+1);
+                $(xmlDoc).find("vim-conversation-speaker:last").text(names[i]);
+                names_letter[i] = names_letter[i].charAt(0);
+            }
+
+            $(htmldata).find("p").contents().unwrap();
+            
+            var spans = $(htmldata).find("span");
+            for (i = +(count > 1); i < spans.length; i++) {
+                if (/[A-Z]:*\s*$/.test($(spans[i]).text())) {
+                    var speaker_id = names_letter.indexOf($(spans[i]).text().charAt(0)) + 1;
+                    $(xmlDoc).find("vim-conversation-content").append("<vim-conversation-item></vim-conversation-item>");
+                    $(xmlDoc).find("vim-conversation-item:last").attr("speaker-id", speaker_id);              
+                } else {
+                    $(xmlDoc).find("vim-conversation-item:last").append($(spans[i]).text());
+                }
+            }
+            return (xmlDoc);
+        }
+        
+        
+        function dnd(htmldata) {
+//            var xml_template = "<vim-dnd-text><vim-dnd-text-drags></vim-dnd-text-drags><vim-dnd-text-content><p></p></vim-dnd-text-content></vim-dnd-text>";       
+//            var template = $.parseXML(xml_template);
+            
+            var list = $(htmldata).find("ol");
+            if (list.length > 0) {
+                list = $('<div/>').append($(list).clone());
+                $(list).find("*").removeAttr("dir");
+                $(list).find("*").removeAttr("style");
+                list = list.html();
+                var xml = "<vim-dnd-text><vim-dnd-text-drags></vim-dnd-text-drags><vim-dnd-text-content>" + list + "</vim-dnd-text-content></vim-dnd-text>";
+            } else {
+                var spans = $(htmldata).find("span");
+                spans = $('<div/>').append($(spans).clone()).html();
+                var xml = "<vim-dnd-text><vim-dnd-text-drags></vim-dnd-text-drags><vim-dnd-text-content>" + spans + "</vim-dnd-text-content></vim-dnd-text>";
+            }
+ 
+            var xmlDoc = $.parseXML(xml);
+            var k = 1; //drag id
+            $(xmlDoc).find("span").each(function() {
+                if (/{\S+}/.test($(this).text())) {
+                    var txt = $(this).text().replace('{','').replace('}','');
+                    var drag = "<vim-dnd-text-drag id='" + k + "'>" + txt.trim() + "</vim-dnd-text-drag>";
+                    var drop = "<vim-dnd-text-drop drag-ids='" + k + "'></vim-dnd-text-drop>";
+                    $(xmlDoc).find("vim-dnd-text-drags").append(drag);
+                    $(this).replaceWith(drop);
+                    k = k + 1;  
+                } else {
+                    $(this).replaceWith(this.childNodes);
+                }				
+            });
+			var reg = /{\S+}/;
+			var match = null;
+			while (match = reg.exec($(xmlDoc).find("vim-dnd-text-content").text())) {
+//			    console.log(match[0]);
+			    match_txt = match[0].replace('{','').replace('}','');
+				var drag = "<vim-dnd-text-drag id='" + k + "'>" + match_txt + "</vim-dnd-text-drag>";
+				var drop = "<vim-dnd-text-drop drag-ids='" + k + "'></vim-dnd-text-drop>";
+				$(xmlDoc).find("vim-dnd-text-content").text($(xmlDoc).find("vim-dnd-text-content").text().replace(match, drop));
+				$(xmlDoc).find("vim-dnd-text-drags").append(drag);
+				k = k + 1;
+			};
+            var xmlString = (new XMLSerializer()).serializeToString(xmlDoc);
+			xmlString = xmlString.replace(/(&lt;)/g,"<").replace(/(&gt;)/g,">");
+			xmlDoc = $.parseXML(xmlString);
+            return (xmlDoc);
+        }
+        
+        function input(htmldata) {            
+            var list = $(htmldata).find("ol");
+            if (list.length > 0) {
+                list = $('<div/>').append($(list).clone());
+                $(list).find("*").removeAttr("dir");
+                $(list).find("*").removeAttr("style");
+                list = list.html();
+                var xml = list
+            } else {
+                console.log($(htmldata).find("span").length);
+                var spans = $(htmldata).find("span");
+                spans = $('<div/>').append($(spans).clone()).html();
+                var xml = spans;
+                xml = "<p>" + xml + "</p>";
+            }
+            var xmlDoc = $.parseXML(xml);
+//            console.log($(xmlDoc).find("span").length);
+            $(xmlDoc).find("span").each(function() {
+                if (/{\S+}/.test($(this).text())) {
+                    var txt = $(this).text().replace('{','').replace('}','');
+                    var answers = txt.split('/');
+                    var input = "<vim-input><vim-input-answers>";
+                    for (i = 0; i < answers.length; i ++) {
+                        input = input + "<vim-input-item>" + answers[i].trim() + "</vim-input-item>";
+                    }
+                    input = input + "</vim-input-answers></vim-input>";
+                    $(this).replaceWith(input); 
+                } else {
+                    $(this).replaceWith(this.childNodes);
+                }   
+            });
+
+            return (xmlDoc);        
+        }
+        
+        function select(htmldata) {            
+            var list = $(htmldata).find("ol");
+            if (list.length > 0) {
+                list = $('<div/>').append($(list).clone());
+                $(list).find("*").removeAttr("dir");
+                $(list).find("*").removeAttr("style");
+                list = list.html();
+                var xml = list
+            } else {
+//                console.log($(htmldata).find("span").length);
+                var spans = $(htmldata).find("span");
+                spans = $('<div/>').append($(spans).clone()).html();
+                var xml = spans;
+                xml = "<p>" + xml + "</p>";
+            }
+            var xmlDoc = $.parseXML(xml);
+            console.log($.parseXML(xml));
+            $(xmlDoc).find("span").each(function() {
+                if (/{\S+}/.test($(this).text())) {
+                    var txt = $(this).text().replace('{','').replace('}','');
+                    var answers = txt.split('/');
+                    var input = "<vim-select><vim-select-answers>";
+                    for (i = 0; i < answers.length; i ++) {
+                        input = input + "<vim-select-item>" + answers[i].trim() + "</vim-select-item>";
+                    }
+                    input = input + "</vim-select-answers></vim-select>";
+                    $(this).replaceWith(input); 
+                } else {
+                    $(this).replaceWith(this.childNodes);
+                }   
+            });
+
+            return (xmlDoc);        
+        }        
+      
+        function list(htmldata) {
+            var list = $(htmldata).find("ol");
+            if (list.length == 0) list = $(htmldata).find("ul");
+ //           console.log($('<div/>').append($(list).clone()).html());
+            $(list).find("span").each(function() {
+                $(this).replaceWith(this.childNodes);
+            });
+            list = $('<div/>').append($(list).clone());
+            $(list).find("*").removeAttr("dir");
+            $(list).find("*").removeAttr("style");
+            var xml = list.html();
+            var xmlDoc = $.parseXML(xml);
+            return (xmlDoc);
+        }
+                
+        var type = $("input[name=type]:checked", "#myForm").val();
+
+        if (type == "dialogue") var xmlData = dialogue(htmldata);
+        else if (type == "dnd") var xmlData = dnd(htmldata);
+        else if (type == "list") var xmlData = list(htmldata);
+        else if (type == "input") var xmlData = input(htmldata);
+        else if (type == "select") var xmlData = select(htmldata);
+        else alert("Не выбран тэг.")
+        
+        var xmlstring = (new XMLSerializer()).serializeToString(xmlData);
+//        console.log(vkbeautify.xml(xmlstring));
+        $("#ta").val(vkbeautify.xml(xmlstring));
+        })
+</script>
+</html>
+

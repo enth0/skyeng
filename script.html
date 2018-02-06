@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script src="https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/vkbeautify/vkbeautify.0.99.00.beta.js"></script>
+</head>
+ <body>
+
+ 
+    <table>
+  <tr>
+    <td><textarea id="ta" rows="30" cols="80"></textarea></td>
+        <td style="vertical-align: top;"> 
+            <form id="myForm">
+                <!-- <input type="radio" name="type" value="dialogue">диалог<br> -->
+                <input type="radio" name="type" value="list">список<br>
+                <input type="radio" name="type" value="select">селект<br>
+                <input type="radio" name="type" value="input">инпут<br>
+                <input type="radio" name="type" value="dnd">днд<br>
+            </form> 
+         <ol>
+          <li>Выберете нужный тэг из списка выше</li>
+          <li>Выделите нужное упражнение в доке и скопируйте (<a href="https://drive.google.com/open?id=1lGCq3EcKPScR-FO9Gl90BnWoPfW_AjW6l2xc8IOL3Yw">примеры упражнений</a>)</li>
+          <li>Вернитесь на эту страницу и нажмите Ctrl + V, в окне слева должна появиться готовая верстка</li>
+          </li>
+		  <li>Если скрипт не работает на каком-то упражнении, просьба скопировать упражнение из дока <a href="https://docs.google.com/document/d/17dI1G8E63CbkOuguSBqT7etp35ASEcORr6J8PwlnSZc/edit?usp=sharing">сюда</a>.<br/>
+		  Также туда можно писать любые комментарии по работе скрипта.</li>
+         </ol>
+        </td>
+  </tr>
+
+</table>
+
+<p></p>
+<button>Copy</button>
+ 
+ <script>
+    $("button").click(function(){
+        $("textarea").select();
+        document.execCommand('copy');
+    });
+ 
+    $(document).on("paste", function(e) {
+        e.preventDefault();
+        var htmldata = e.originalEvent.clipboardData.getData('text/html');
+        var r = /{([^{}]*)}/g;                    
+        
+		function scanSpans(htmldata) {
+			plaintxt = '';
+			$(htmldata).find("span").each(function() {
+                if ($(this).css('background-color') == 'rgb(0, 255, 0)'){
+					plaintxt += '%%%' + $(this).text();
+				} else {
+					plaintxt += $(this).text();
+				}
+				
+			});
+			
+			return plaintxt;
+		}
+		
+		function processList(htmlData) {
+			list = '';
+			$(htmldata).find('li').each(function() {
+				list += '<li>' + scanSpans($(this)) + '</li>';
+			});
+			residue = $(htmldata);
+			residue.find('ol').remove();
+			residue.find('ul').remove();
+			residue = scanSpans(residue);
+			if (residue) {
+				list += '<li>' + residue + '</li>';
+			}
+			list = '<ol>' + list + '</ol>';
+			return list;
+		}
+		
+		function processHTML(htmldata) {
+			if ($(htmldata).find('ol').length || 
+				$(htmldata).find('ul').length) {
+				s = processList(htmldata);
+			} else {
+				s = scanSpans(htmldata);
+			}
+			return s;
+		}
+					
+		function select(htmldata) {
+			htmldata = processHTML(htmldata);
+			
+			function replacer(match, p1) {
+				p1 = p1.replace(/\//g, '</vim-select-item-title></vim-select-item><vim-select-item><vim-select-item-title>');
+				p1 = '<vim-select><vim-select-answers><vim-select-item><vim-select-item-title>' + p1 + 
+					 '</vim-select-item-title></vim-select-item></vim-select-answers></vim-select>';
+				return p1;
+			}
+					
+			xml = htmldata.replace(r, replacer);
+			xml = xml.replace(/(<vim-select-item><vim-select-item-title>)(((?!<\/vim).)*)%%%/g, function (match, p1, p2) {
+				return (p1.replace('>',' correct="true">') + p2)
+			});
+			xml = xml.replace(/%%%/g, '');
+			
+            return xml;        
+        }
+		
+		function input(htmldata) {
+			htmldata = processHTML(htmldata);
+			
+			function replacer(match, p1) {
+				p1 = '<vim-input><vim-input-answers><vim-input-item>' + p1 + 
+					 '</vim-input-item></vim-input-answers></vim-input>';
+				return p1;
+			}			
+			xml = htmldata.replace(r, replacer);
+			xml = xml.replace(/%%%/g, '');
+			return xml;
+		}
+
+		function dnd(htmldata) {
+			htmldata = processHTML(htmldata);
+			cards = htmldata.match(r);
+			function replacer(match, p1) {
+				p1 = '<vim-dnd-text-drop drag-ids="' + (cards.indexOf('{' + p1 + '}') + 1) + '">' + p1 + 
+					 '</vim-dnd-text-drop>';
+				return p1;
+			}
+			content = '<vim-dnd-text-content><p>' + htmldata.replace(r, replacer) + '</p></vim-dnd-text-content>';
+			
+			drags = '';
+			for (i = 0; i < cards.length; i++) {
+				drags += '<vim-dnd-text-drag id="' + (i+1) +'">' + cards[i].slice(1,-2) + '</vim-dnd-text-drag>';
+			}
+			drags = '<vim-dnd-text-drags>' + drags + '</vim-dnd-text-drags>';
+			
+			xml = '<vim-dnd-text>' + drags + content + '</vim-dnd-text>'
+			xml = xml.replace(/%%%/g, '');
+			return xml;
+		}
+		
+		function dialogue(htmldata) {
+			return ('');
+		}
+ 
+
+		            
+        var type = $("input[name=type]:checked", "#myForm").val();
+		
+		switch (type) {
+			case "select":
+				xmlstring = select(htmldata);
+				break
+			case "input":
+				xmlstring = input(htmldata);
+				break
+			case "list":
+				xmlstring = processList(htmldata);
+				break		
+//			case "dialogue":
+//				xmlstring = dialogue(htmldata);
+//				break
+			case "dnd":
+				xmlstring = dnd(htmldata);
+				break
+			default:
+				alert("Выберите тэг!")
+		}
+        
+//        var xmlstring = (new XMLSerializer()).serializeToString(xmlData);
+        $("#ta").val(vkbeautify.xml(xmlstring));
+        })
+</script>
+</html>
+
