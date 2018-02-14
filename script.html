@@ -109,6 +109,8 @@
 			htmldata = processHTML(htmldata);
 			
 			function replacer(match, p1) {
+				p1 = p1.replace(/(=|\/)/g, '</vim-input-item><vim-input-item>');
+		//		p1 = p1.replace(/\//g, '</vim-input-item><vim-input-item>');
 				p1 = '<vim-input><vim-input-answers><vim-input-item>' + p1 + 
 					 '</vim-input-item></vim-input-answers></vim-input>';
 				return p1;
@@ -130,7 +132,7 @@
 			
 			drags = '';
 			for (i = 0; i < cards.length; i++) {
-				drags += '<vim-dnd-text-drag id="' + (i+1) +'">' + cards[i].slice(1,-2) + '</vim-dnd-text-drag>';
+				drags += '<vim-dnd-text-drag id="' + (i+1) +'">' + cards[i].slice(1,-1) + '</vim-dnd-text-drag>';
 			}
 			drags = '<vim-dnd-text-drags>' + drags + '</vim-dnd-text-drags>';
 			
